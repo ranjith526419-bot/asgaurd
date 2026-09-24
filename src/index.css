@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    
+    /* Default dark theme tokens */
+    --color-vault-bg: #0a0a0a;
+    --color-vault-surface: #141414;
+    --color-vault-border: #262626;
+    --color-vault-text: #fafafa;
+    --color-vault-muted: #a1a1a1;
+    --color-vault-primary: #6366f1;
+    --color-vault-danger: #ef4444;
+    --color-vault-success: #22c55e;
+  }
+
+  html.light {
+    --color-vault-bg: #f8fafc;
+    --color-vault-surface: #ffffff;
+    --color-vault-border: #e2e8f0;
+    --color-vault-text: #0f172a;
+    --color-vault-muted: #64748b;
+    --color-vault-primary: #4f46e5;
+    --color-vault-danger: #dc2626;
+    --color-vault-success: #16a34a;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-vault-bg);
+  color: var(--color-vault-text);
+  min-height: 100vh;
+}
+
+code, pre, textarea.font-mono, input.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Custom SVG draw animation for the success checkmark */
+@keyframes checkmark-draw {
+  0% {
+    stroke-dashoffset: 48;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-checkmark {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkmark-draw 0.55s cubic-bezier(0.65, 0, 0.45, 1) forwards 0.1s;
+}
+
+/* Subtle pulse glow for danger reveal button */
+@keyframes red-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px -3px rgba(239, 68, 68, 0.4), 0 0 6px -2px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px 2px rgba(239, 68, 68, 0.65), 0 0 10px 1px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.reveal-pulse {
+  animation: red-glow-pulse 2.2s infinite ease-in-out;
+}
+
+/* Radial gradient background */
+.vault-bg-glow {
+  background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.14), transparent 70%);
+}
+
+html.light .vault-bg-glow {
+  background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.08), transparent 70%);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}

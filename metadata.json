@@ -1,0 +1,6 @@
+{
+  "name": "Ephemeral Secret Vault",
+  "description": "Self-destructing secret sharing tool. Create encrypted, one-time self-destructing links that burn forever after viewing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
