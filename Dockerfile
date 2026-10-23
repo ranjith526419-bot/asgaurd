@@ -30,7 +30,7 @@ RUN npm ci --omit=dev && npm install -g tsx
 # Copy built frontend assets and backend source code
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
-COPY --from=builder /app/backend ./backend
+
 COPY --from=builder /app/server.ts ./server.ts
 
 EXPOSE 3000
