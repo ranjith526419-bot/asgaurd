@@ -23,6 +23,9 @@ export function getApiBaseUrl(): string {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
     if (import.meta.env.NEXT_PUBLIC_API_URL) return import.meta.env.NEXT_PUBLIC_API_URL;
   }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
   return 'http://localhost:3000';
 }
 
@@ -40,7 +43,48 @@ export async function computeSha256(text: string): Promise<string> {
   }
 }
 
-// In-memory demo vault storage for seamless sandbox testing
+// Safe storage helpers that never throw in restrictive browser sandbox or private browsing
+export function safeGetItem(key: string): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function safeSetItem(key: string, val: string): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.setItem(key, val);
+  } catch {
+    // storage not available or quota exceeded
+  }
+}
+
+export function safeRemoveItem(key: string): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.removeItem(key);
+  } catch {
+    // storage not available
+  }
+}
+
+export function getAppSubpath(): string {
+  if (typeof window === 'undefined') return '';
+  const pathname = window.location.pathname;
+  if (pathname.startsWith('/asgaurd')) {
+    return '/asgaurd';
+  }
+  const viteBase = typeof import.meta !== 'undefined' ? import.meta.env?.BASE_URL : undefined;
+  if (viteBase && viteBase !== '/' && viteBase !== './') {
+    return viteBase.replace(/\/+$/, '');
+  }
+  return '';
+}
+
+// In-memory demo vault storage for optional sandbox testing
 interface DemoSecretEntry {
   id: string;
   secret: string;
@@ -57,17 +101,21 @@ const demoVault = new Map<string, DemoSecretEntry>();
 
 const DEMO_STORAGE_KEY = 'ephemeral_vault_demo_mode';
 export function isDemoModeActive(): boolean {
-  if (typeof window === 'undefined') return true;
-  const val = localStorage.getItem(DEMO_STORAGE_KEY);
-  // Default to true in standalone browser sandbox if no backend configured
-  if (val === null) return true;
+  if (typeof window === 'undefined') return false;
+  const val = safeGetItem(DEMO_STORAGE_KEY);
+  // Default to false so live backend API is used!
+  if (val === null) return false;
   return val === 'true';
 }
 
 export function setDemoModeActive(active: boolean): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(DEMO_STORAGE_KEY, active ? 'true' : 'false');
-  window.dispatchEvent(new CustomEvent('vault_demo_mode_changed', { detail: { active } }));
+  safeSetItem(DEMO_STORAGE_KEY, active ? 'true' : 'false');
+  try {
+    window.dispatchEvent(new CustomEvent('vault_demo_mode_changed', { detail: { active } }));
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -85,7 +133,8 @@ export async function createSecret(payload: CreateSecretRequest): Promise<Create
 
     const expiresDate = new Date(Date.now() + payload.ttl_seconds * 1000);
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-    const view_url = `${origin}/view/${id}`;
+    const subpath = getAppSubpath();
+    const view_url = `${origin}${subpath}/view/${id}`;
 
     demoVault.set(id, {
       id,
@@ -134,6 +183,10 @@ export async function createSecret(payload: CreateSecretRequest): Promise<Create
     const data = (await response.json()) as CreateSecretResponse;
     if (!data.checksum) {
       data.checksum = checksum;
+    }
+    if (typeof window !== 'undefined') {
+      const subpath = getAppSubpath();
+      data.view_url = `${window.location.origin}${subpath}/view/${data.id}`;
     }
     return data;
   }
@@ -253,3 +306,26 @@ export function getDemoSecretMetadata(id: string): { hint?: string; has_password
   }
   return null;
 }
+
+// Fetch public secret metadata (hint, expiration, password requirement) without burning
+export async function getSecretMetadata(id: string): Promise<{
+  id?: string;
+  hint?: string;
+  requires_password?: boolean;
+  expires_at?: string;
+  views_remaining?: number;
+  secret_type?: string;
+} | null> {
+  if (isDemoModeActive()) {
+    return getDemoSecretMetadata(id);
+  }
+  try {
+    const baseUrl = getApiBaseUrl().replace(/\/+$/, '');
+    const res = await fetch(`${baseUrl}/api/secret/${encodeURIComponent(id)}/meta`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+

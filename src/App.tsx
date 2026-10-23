@@ -13,12 +13,30 @@ import { TermsPage } from './components/pages/TermsPage';
 import { StatusPage } from './components/pages/StatusPage';
 import { NotFoundPage } from './components/pages/NotFoundPage';
 import { CreateSecretResponse } from './types';
-import { isDemoModeActive, setDemoModeActive, getApiBaseUrl } from './lib/api';
+import { isDemoModeActive, setDemoModeActive, getApiBaseUrl, getAppSubpath } from './lib/api';
 import toast from 'react-hot-toast';
+
+// Convert full browser pathname to normalized app route (e.g. '/asgaurd/about' -> '/about', '/asgaurd/' -> '/')
+function normalizePath(fullPath: string): string {
+  const base = getAppSubpath();
+  let route = fullPath;
+  if (base && route.startsWith(base)) {
+    route = route.slice(base.length);
+  }
+  // Strip search and hash if present
+  route = route.split('?')[0].split('#')[0];
+  if (!route.startsWith('/')) {
+    route = '/' + route;
+  }
+  if (route.length > 1 && route.endsWith('/')) {
+    route = route.slice(0, -1);
+  }
+  return route || '/';
+}
 
 export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() => {
-    return typeof window !== 'undefined' ? window.location.pathname : '/';
+    return typeof window !== 'undefined' ? normalizePath(window.location.pathname) : '/';
   });
   const [createdSecret, setCreatedSecret] = useState<CreateSecretResponse | null>(null);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => isDemoModeActive());
@@ -26,7 +44,7 @@ export default function App() {
   // Handle browser popstate navigation
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
+      setCurrentPath(normalizePath(window.location.pathname));
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -43,10 +61,17 @@ export default function App() {
     return () => window.removeEventListener('vault_demo_mode_changed', handleDemoChange);
   }, []);
 
-  const navigate = (path: string) => {
+  const navigate = (route: string) => {
     if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', path);
-      setCurrentPath(path);
+      const base = getAppSubpath();
+      const targetRoute = route.startsWith('/') ? route : '/' + route;
+      const fullPath = targetRoute === '/' ? (base ? `${base}/` : '/') : `${base}${targetRoute}`;
+      try {
+        window.history.pushState({}, '', fullPath);
+      } catch {
+        // Fallback for restricted history environments
+      }
+      setCurrentPath(normalizePath(targetRoute));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };

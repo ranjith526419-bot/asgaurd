@@ -20,7 +20,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { CopyButton } from './CopyButton';
 import { CountdownTimer } from './CountdownTimer';
 import { QrCodeModal } from './QrCodeModal';
-import { burnSecret, VaultApiError, getDemoSecretMetadata } from '../lib/api';
+import { burnSecret, VaultApiError, getDemoSecretMetadata, getSecretMetadata } from '../lib/api';
 import { BurnSecretResponse } from '../types';
 import toast from 'react-hot-toast';
 
@@ -40,6 +40,17 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
   // Recipient Hint from metadata or payload
   const demoMeta = getDemoSecretMetadata(secretId);
   const [hint, setHint] = useState<string | null>(demoMeta?.hint || null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getSecretMetadata(secretId).then((meta) => {
+      if (!isMounted || !meta) return;
+      if (meta.hint) setHint(meta.hint);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [secretId]);
 
   // Password Prompt state
   const [password, setPassword] = useState('');

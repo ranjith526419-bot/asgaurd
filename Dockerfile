@@ -12,19 +12,27 @@ RUN npm ci
 # Copy application source
 COPY . .
 
-# Build application bundle
+# Build frontend application bundle
 RUN npm run build
 
-# Production stage with lightweight Nginx
-FROM nginx:alpine
+# Production runtime stage
+FROM node:22-alpine AS runner
 
-# Copy custom Nginx configuration with SPA routing support
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy compiled static assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+ENV NODE_ENV=production
+ENV PORT=3000
 
-# Expose default HTTP port
-EXPOSE 80
+# Copy manifests and install production dependencies
+COPY package*.json ./
+RUN npm ci --omit=dev && npm install -g tsx
 
-CMD ["nginx", "-g", "daemon off;"]
+# Copy built frontend assets and backend source code
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/backend ./backend
+COPY --from=builder /app/server.ts ./server.ts
+
+EXPOSE 3000
+
+CMD ["tsx", "server.ts"]

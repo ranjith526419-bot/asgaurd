@@ -98,11 +98,78 @@ gcloud run deploy ephemeral-vault-ui \
 
 ---
 
+## 💻 Running the Services Locally
+
+This project is a full-stack Node.js + Express + React application:
+
+### Run Everything Unified (Recommended)
+```bash
+# Installs dependencies
+npm install
+
+# Starts both Express backend API and Vite frontend on port 3000
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser. All API requests (`/api/secret`, `/api/secret/:id/burn`) are handled directly by the Express backend.
+
+---
+
+## 🚀 Deploying Backend so GitHub Pages Can Communicate With It
+
+GitHub Pages only hosts static files (HTML/JS/CSS). The cryptographic vault backend runs on Node.js. Follow these simple steps to deploy your backend and connect your GitHub Pages frontend to it:
+
+### Step 1: Deploy the Backend (Free on Render, Railway, or Fly.io)
+
+#### Option A: Render (Free Web Service)
+1. Go to [render.com](https://render.com) and click **"New +"** → **"Web Service"**.
+2. Connect your GitHub repository.
+3. Configure the service:
+   - **Environment**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
+4. Under **Environment Variables**, add:
+   - `CORS_ORIGIN`: `https://<YOUR-USERNAME>.github.io` (or `*`)
+   - `ENCRYPTION_MASTER_KEY`: A secure random 32-character string or hex (optional, a secure key is generated automatically if omitted)
+5. Click **"Create Web Service"**.
+6. Render will provide your public backend URL, e.g.: `https://ephemeral-vault-backend.onrender.com`.
+
+#### Option B: Railway
+1. Go to [railway.app](https://railway.app) → **"New Project"** → **"Deploy from GitHub repo"**.
+2. Add environment variable `CORS_ORIGIN` set to `https://<YOUR-USERNAME>.github.io`.
+3. In service settings, generate a domain (e.g. `https://vault-api-production.up.railway.app`).
+
+---
+
+### Step 2: Configure Your GitHub Pages Frontend to Connect to the Backend
+
+1. In your GitHub repository, go to **Settings** → **Secrets and variables** → **Actions**.
+2. Click **"New repository secret"** (or Repository Variable under Variables):
+   - **Name**: `VITE_API_URL`
+   - **Value**: `https://<YOUR-BACKEND-SERVICE>.onrender.com` (your backend URL from Step 1, without trailing slash)
+3. Re-run your GitHub Actions workflow or push a commit. Vite will embed `VITE_API_URL` into the production bundle during `npm run build`.
+
+#### Dynamic / Runtime API Configuration (No rebuild required)
+You can also point the GitHub Pages frontend to your backend dynamically at runtime:
+The frontend checks:
+1. `window.__VAULT_API_URL__` (can be set in `index.html`)
+2. `import.meta.env.VITE_API_URL`
+3. Current origin (`window.location.origin`)
+
+---
+
+## 🔒 Security & CORS Architecture
+
+- **AES-256-GCM Encryption**: Secrets are encrypted on the server using 12-byte cryptographic nonces and 16-byte authentication tags. Keys are never exposed in frontend code.
+- **Atomic Burn**: Each secret is deleted synchronously on retrieval; concurrent requests cannot double-read.
+- **CORS Protection**: The backend automatically allows requests from all `https://*.github.io` origins and localhost, with credentials and preflight `OPTIONS` caching.
+
+---
+
 ## ⚙️ Environment Variables Reference
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:3000` | Points to your backend API URL for secret encryption and burning. |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:3000` | Fallback backend URL configuration. |
-
-*Note: If no backend API URL is provided, the application automatically runs in **Demo Sandbox** mode with in-memory encryption, so all routes and previews work out of the box.*
+| `VITE_API_URL` | `window.location.origin` | Points the frontend to the backend API URL. Set to your deployed backend URL for GitHub Pages. |
+| `CORS_ORIGIN` | `*` | Comma-separated list of allowed origins on the backend (e.g., `https://myuser.github.io`). Automatically permits `*.github.io` by default. |
+| `ENCRYPTION_MASTER_KEY` | Auto-generated seed | 256-bit master key seed for AES-256-GCM encryption at rest. |
+| `PORT` | `3000` | Port for the backend Express server. |

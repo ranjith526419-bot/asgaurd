@@ -1,80 +1,147 @@
-# Ephemeral Secret Vault — Production Web Frontend
+# Ephemeral Secret Vault (Full-Stack React + Node.js Express)
 
-A modern, zero-knowledge, self-destructing secret sharing tool (inspired by OneTimeSecret + PrivateBin + Yopass). Users create encrypted secrets, configure expiration and view policies, and distribute single-use links that burn forever upon redemption.
+A modern, zero-knowledge, self-destructing secret sharing tool (inspired by OneTimeSecret, PrivateBin, and Yopass). Users create encrypted secrets, configure expiration and view policies, and distribute single-use links that burn forever upon redemption.
+
+---
+
+## 📂 Project Structure & Where the Backend is Located
+
+When downloading or cloning this repository, the project is structured into dedicated frontend and backend directories:
+
+```text
+├── server/                         # 🔒 Dedicated Node.js + Express Backend
+│   ├── crypto.ts                   # AES-256-GCM cipher engine & scrypt key derivation
+│   ├── vault.ts                    # In-memory atomic store & background TTL cleaner
+│   ├── routes.ts                   # Express REST API (/api/secret, /api/secret/:id/burn, /api/health)
+│   ├── app.ts                      # Express app setup, CORS, and Vite dev integration
+│   ├── index.ts                    # Backend runner entry point
+│   └── README.md                   # Backend documentation
+├── backend/                        # 🔒 Backend alias entry point
+│   ├── index.ts                    # Re-exports server modules
+│   └── README.md                   # Backend quick guide
+├── server.ts                       # 🚀 Root full-stack server entry (dev & prod)
+├── src/                            # 🎨 React 19 Frontend
+│   ├── components/                 # UI components (CreateSecretForm, RevealCard, etc.)
+│   ├── lib/                        # Client API client (api.ts) & utilities
+│   ├── App.tsx                     # Main router and view controllers
+│   ├── main.tsx                    # React DOM entry
+│   └── index.css                   # Tailwind CSS styles
+├── public/                         # Static assets and icons
+├── DEPLOYMENT.md                   # Complete cloud deployment guide (Render, Railway, GitHub Pages)
+├── Dockerfile                      # Production Docker container
+├── package.json                    # Scripts & dependencies
+└── vite.config.ts                  # Vite build configuration
+```
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: React 19 + TypeScript + Vite
-- **Styling**: Tailwind CSS
-- **Animations**: CSS Keyframes + Canvas-Confetti
-- **Icons**: `lucide-react`
-- **Notifications**: `react-hot-toast`
-- **QR Codes**: `qrcode.react` (with PNG download support)
-- **Theme**: Dark default (`#0a0a0a`) and High-Contrast Light Mode with localStorage persistence
+- **Backend**:
+  - **Runtime**: Node.js 22 + TypeScript (`tsx`)
+  - **Framework**: Express 4
+  - **Cryptography**: Native `crypto` module with **AES-256-GCM** (96-bit unique IVs, 128-bit authentication tags, and `scrypt` password hashing)
+  - **Storage**: In-memory atomic vault with background TTL garbage collector running every 3 seconds
+- **Frontend**:
+  - **Framework**: React 19 + TypeScript + Vite
+  - **Styling**: Tailwind CSS
+  - **Icons**: `lucide-react`
+  - **Notifications**: `react-hot-toast`
+  - **QR Codes**: `qrcode.react`
+  - **Theme**: Dark default (`#0a0a0a`) and High-Contrast Light Mode
 
 ---
 
-## 📄 8 Complete Routes
+## 💻 Running Locally
 
-| Route | View | Description |
-|---|---|---|
-| `/` | **Home — Create Secret** | Form with 4 secret types (Text, Password, File, URL), line numbers, paste & clear, password generator, TTL presets & custom popover, max views selector, password lock, advanced options (custom slug, email notifications, webhooks), success state with confetti, QR code generator, and recent secrets manager. |
-| `/view/:id` | **Recipient — Reveal & Burn** | 6-state interactive flow: Ready, Confirm modal with required checkbox, Password prompt with retry counter and lockout, Revealed state with 60s auto-hiding circular countdown ring, shoulder privacy toggle, 404 ghost view, and network retry. |
-| `/about` | **How It Works & Architecture** | 3-step visual flow, cryptographic explanation of AES-256-GCM, unique IV per secret, threat model diagram, and comparison table (Vault vs Slack vs Email vs Pastebin). |
-| `/faq` | **Frequently Asked Questions** | Interactive searchable accordion answering 10 questions on encryption, memory wiping, TTL expiration, file limits, and API usage. |
-| `/privacy` | **Zero-Knowledge Privacy Policy** | Explicit guarantees on zero plaintext logging, non-logging of IPs, and ephemeral memory scrubbing. |
-| `/terms` | **Terms of Service** | Acceptable use policies, disclaimers, and warranty terms. |
-| `/status` | **System Status & Health Check** | Live latency pinging tool, 99.99% uptime tracker, 90-day operational grid, and subsystem statuses. |
-| `/404` | **Custom 404 Not Found** | Custom animated ghost state with navigation back to Home. |
+### 1. Unified Mode (Frontend + Backend on `localhost:3000`) — Recommended
+This starts the Express server which automatically mounts Vite middleware in development:
+```bash
+npm install
+npm run dev
+```
+Open **`http://localhost:3000`** in your browser. All API requests (`/api/secret`, `/api/health`, `/api/secret/:id/burn`) are handled by Express directly.
+
+### 2. Run Only the Backend
+If you want to run the backend API service by itself:
+```bash
+npm run backend
+# or
+npx tsx server/index.ts
+```
+The backend API starts on `http://localhost:3000` (or the port specified in `PORT`).
+
+### 3. Run Only the Frontend
+```bash
+npm run frontend
+```
 
 ---
 
-## 📡 API Contract
+## 📡 Backend API Endpoints
 
-Base URL: `NEXT_PUBLIC_API_URL` or `VITE_API_URL` (default: `http://localhost:3000`)
+Base URL: `http://localhost:3000` (or `VITE_API_URL` when deployed)
 
-### 1. `POST /api/secret`
+### 1. `GET /api/health`
+Health check and active secret count.
+```json
+{
+  "status": "operational",
+  "uptime": 128.4,
+  "active_secrets": 2,
+  "timestamp": "2026-10-23T05:00:00.000Z",
+  "encryption": "AES-256-GCM"
+}
+```
+
+### 2. `POST /api/secret`
 Creates an encrypted secret.
 - **Request Body**:
   ```json
   {
-    "secret": "...",
+    "secret": "confidential data",
     "ttl_seconds": 3600,
     "max_views": 1,
     "password": "optional-passphrase",
     "hint": "optional hint",
-    "secret_type": "text",
-    "custom_slug": "optional-slug",
-    "notify_email": "optional-email",
-    "webhook_url": "optional-webhook",
-    "burn_after_seconds": 60
+    "secret_type": "text"
   }
   ```
-- **Returns 201**:
+- **Response 201**:
   ```json
   {
-    "id": "abc123xyz",
-    "view_url": "http://localhost:3000/view/abc123xyz",
-    "expires_at": "2026-09-24T06:30:00.000Z",
+    "id": "e89c0b1a2c3d",
+    "view_url": "http://localhost:3000/view/e89c0b1a2c3d",
+    "expires_at": "2026-10-23T06:00:00.000Z",
     "views_remaining": 1,
-    "checksum": "a8f3e2b1..."
+    "checksum": "f3b2a1..."
   }
   ```
 
-### 2. `POST /api/secret/:id/burn`
-Burns and reveals the secret. **Never called on initial page load**, only upon explicit user confirmation.
+### 3. `GET /api/secret/:id/meta`
+Safely retrieves non-sensitive metadata (hint, password requirement) without burning or decrementing the view count.
+```json
+{
+  "id": "e89c0b1a2c3d",
+  "hint": "Bank PIN",
+  "requires_password": true,
+  "expires_at": "2026-10-23T06:00:00.000Z",
+  "views_remaining": 1
+}
+```
+
+### 4. `POST /api/secret/:id/burn`
+Decrypts and **atomically burns** the secret from server memory.
 - **Request Body**:
   ```json
   {
     "password": "optional-passphrase"
   }
   ```
-- **Returns 200**:
+- **Response 200**:
   ```json
   {
-    "secret": "my-confidential-secret",
+    "secret": "confidential data",
     "views_remaining": 0,
     "burned": true
   }
@@ -84,12 +151,8 @@ Burns and reveals the secret. **Never called on initial page load**, only upon e
 
 ---
 
-## ⚡ UX Features
+## 🌐 Deploying to Production
 
-- **Keyboard Shortcuts**:
-  - `Cmd/Ctrl + Enter`: Submit secret creation
-  - `Cmd/Ctrl + K`: Focus secret input
-  - `Escape`: Dismiss confirmation modal
-- **Demo Sandbox Mode**: Built-in toggle in the top bar to test the full end-to-end secret creation, password protection, and burn experience in-memory without requiring an external backend.
-- **File Attachments**: Drag-and-drop support up to 100KB with base64 encoding and one-click download for recipients.
-- **Social Sharing**: Direct share links for WhatsApp, Telegram, Signal, Slack, Email, and QR Code PNG export.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for full instructions on deploying:
+- **Backend**: Render, Railway, Google Cloud Run, or Docker
+- **Frontend**: GitHub Pages, Vercel, Netlify, or Cloudflare Pages

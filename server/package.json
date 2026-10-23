@@ -1,0 +1,22 @@
+{
+  "name": "ephemeral-secret-vault-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AES-256-GCM Ephemeral Secret Vault Backend Service",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx index.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2"
+  }
+}

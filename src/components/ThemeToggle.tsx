@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
+import { safeGetItem, safeSetItem } from '../lib/api';
 
 const THEME_KEY = 'ephemeral_vault_theme';
 
@@ -7,7 +8,7 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
-    const saved = localStorage.getItem(THEME_KEY);
+    const saved = safeGetItem(THEME_KEY);
     if (saved === 'light' || saved === 'dark') {
       setTheme(saved);
       applyTheme(saved);
@@ -19,20 +20,24 @@ export function ThemeToggle() {
   }, []);
 
   const applyTheme = (t: 'dark' | 'light') => {
-    const root = document.documentElement;
-    if (t === 'light') {
-      root.classList.remove('dark');
-      root.classList.add('light');
-    } else {
-      root.classList.remove('light');
-      root.classList.add('dark');
+    try {
+      const root = document.documentElement;
+      if (t === 'light') {
+        root.classList.remove('dark');
+        root.classList.add('light');
+      } else {
+        root.classList.remove('light');
+        root.classList.add('dark');
+      }
+    } catch {
+      // ignore
     }
   };
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
-    localStorage.setItem(THEME_KEY, next);
+    safeSetItem(THEME_KEY, next);
     applyTheme(next);
   };
 
