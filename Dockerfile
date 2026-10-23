@@ -25,7 +25,7 @@ ENV PORT=3000
 
 # Copy manifests and install production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev && npm install -g tsx
+RUN npm ci --omit=dev
 
 # Copy built frontend assets and backend source code
 COPY --from=builder /app/dist ./dist
