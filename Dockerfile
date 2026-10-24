@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm ci || npm install
 
 # Copy application source
 COPY . .
@@ -25,7 +25,7 @@ ENV PORT=3000
 
 # Copy manifests and install production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev || npm install --omit=dev
 
 # Copy built frontend assets and backend source code
 COPY --from=builder /app/dist ./dist
@@ -35,4 +35,4 @@ COPY --from=builder /app/server.ts ./server.ts
 
 EXPOSE 3000
 
-CMD ["tsx", "server.ts"]
+CMD ["node", "server.ts"]
