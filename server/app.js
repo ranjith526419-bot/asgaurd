@@ -25,6 +25,9 @@ async function createApp() {
         if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin)) {
           return callback(null, true);
         }
+        if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(cleanOrigin)) {
+          return callback(null, true);
+        }
         if (configuredOrigins.includes(cleanOrigin) || configuredOrigins.includes("*")) {
           return callback(null, true);
         }
@@ -39,6 +42,7 @@ async function createApp() {
     })
   );
   app.use("/api", apiRouter);
+  app.use(apiRouter);
   if (!isProd) {
     try {
       const { createServer: createViteServer } = await import("vite");

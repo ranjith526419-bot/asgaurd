@@ -7,7 +7,15 @@ import {
   hashPassword,
   verifyPassword
 } from "./crypto.js";
-import { vault, getActiveSecretCount } from "./vault.js";
+import {
+  getActiveSecretCount,
+  getVaultEntry,
+  saveVaultEntry,
+  deleteVaultEntry,
+  hasVaultEntry,
+  burnVaultEntry,
+  getStorageBackendName
+} from "./vault.js";
 const apiRouter = Router();
 function getClientBaseUrl(req) {
   if (process.env.FRONTEND_URL) {
@@ -38,11 +46,12 @@ apiRouter.get(["/health", "/status"], (_req, res) => {
     status: "operational",
     uptime: process.uptime(),
     active_secrets: getActiveSecretCount(),
+    storage: getStorageBackendName(),
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     encryption: "AES-256-GCM"
   });
 });
-apiRouter.post(["/secret", "/secrets"], (req, res) => {
+apiRouter.post(["/secret", "/secrets"], async (req, res) => {
   try {
     const {
       secret,
@@ -69,7 +78,8 @@ apiRouter.post(["/secret", "/secrets"], (req, res) => {
       if (sanitized.length < 3) {
         return res.status(400).json({ error: "Custom slug must be at least 3 alphanumeric characters." });
       }
-      if (vault.has(sanitized)) {
+      const slugExists = await hasVaultEntry(sanitized);
+      if (slugExists) {
         return res.status(400).json({ error: "This custom slug is already in use." });
       }
       id = sanitized;
@@ -106,7 +116,7 @@ apiRouter.post(["/secret", "/secrets"], (req, res) => {
       notify_email,
       webhook_url
     };
-    vault.set(id, entry);
+    await saveVaultEntry(entry);
     const clientBase = getClientBaseUrl(req);
     const view_url = `${clientBase}/view/${id}`;
     return res.status(201).json({
@@ -126,14 +136,14 @@ apiRouter.post(["/secret", "/secrets"], (req, res) => {
     return res.status(500).json({ error: "Internal server error while encrypting secret." });
   }
 });
-apiRouter.get(["/secret/:id/meta", "/secrets/:id/meta"], (req, res) => {
+apiRouter.get(["/secret/:id/meta", "/secrets/:id/meta"], async (req, res) => {
   const id = req.params.id;
-  const entry = vault.get(id);
+  const entry = await getVaultEntry(id);
   if (!entry) {
     return res.status(404).json({ error: "Secret not found, expired, or already destroyed." });
   }
   if (entry.expires_at <= Date.now() || entry.views_remaining <= 0) {
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(404).json({ error: "Secret not found, expired, or already destroyed." });
   }
   return res.json({
@@ -147,14 +157,14 @@ apiRouter.get(["/secret/:id/meta", "/secrets/:id/meta"], (req, res) => {
     file_size: entry.file_size
   });
 });
-const handleBurnSecret = (req, res) => {
+const handleBurnSecret = async (req, res) => {
   const id = req.params.id;
-  const entry = vault.get(id);
+  const entry = await getVaultEntry(id);
   if (!entry) {
     return res.status(404).json({ error: "Secret not found, expired, or already destroyed." });
   }
   if (entry.expires_at <= Date.now()) {
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(404).json({ error: "Secret not found, expired, or already destroyed." });
   }
   if (entry.password_hash && entry.password_salt) {
@@ -173,10 +183,9 @@ const handleBurnSecret = (req, res) => {
       });
     }
   }
-  entry.views_remaining -= 1;
-  const burned = entry.views_remaining <= 0;
-  if (burned) {
-    vault.delete(id);
+  const { entry: burnedEntry, burned } = await burnVaultEntry(id);
+  if (!burnedEntry) {
+    return res.status(404).json({ error: "Secret not found, expired, or already destroyed." });
   }
   try {
     const decrypted = decryptSecret(
@@ -195,13 +204,13 @@ const handleBurnSecret = (req, res) => {
           id: entry.id,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           burned,
-          views_remaining: Math.max(0, entry.views_remaining)
+          views_remaining: Math.max(0, burnedEntry.views_remaining)
         })
       }).catch(() => null);
     }
     return res.status(200).json({
       secret: decrypted,
-      views_remaining: Math.max(0, entry.views_remaining),
+      views_remaining: Math.max(0, burnedEntry.views_remaining),
       burned,
       secret_type: entry.secret_type,
       file_name: entry.file_name,
@@ -210,7 +219,7 @@ const handleBurnSecret = (req, res) => {
     });
   } catch (decryptErr) {
     console.error("Decryption failed:", decryptErr);
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(500).json({ error: "Failed to decrypt secret payload." });
   }
 };

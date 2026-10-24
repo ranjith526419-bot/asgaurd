@@ -7,7 +7,17 @@ import {
   hashPassword,
   verifyPassword,
 } from './crypto.js';
-import { vault, VaultEntry, getActiveSecretCount } from './vault.js';
+import {
+  vault,
+  VaultEntry,
+  getActiveSecretCount,
+  getVaultEntry,
+  saveVaultEntry,
+  deleteVaultEntry,
+  hasVaultEntry,
+  burnVaultEntry,
+  getStorageBackendName,
+} from './vault.js';
 
 export const apiRouter = Router();
 
@@ -44,13 +54,14 @@ apiRouter.get(['/health', '/status'], (_req: Request, res: Response) => {
     status: 'operational',
     uptime: process.uptime(),
     active_secrets: getActiveSecretCount(),
+    storage: getStorageBackendName(),
     timestamp: new Date().toISOString(),
     encryption: 'AES-256-GCM',
   });
 });
 
 // 2. Create Secret (POST /api/secret and /api/secrets)
-apiRouter.post(['/secret', '/secrets'], (req: Request, res: Response) => {
+apiRouter.post(['/secret', '/secrets'], async (req: Request, res: Response) => {
   try {
     const {
       secret,
@@ -81,7 +92,8 @@ apiRouter.post(['/secret', '/secrets'], (req: Request, res: Response) => {
       if (sanitized.length < 3) {
         return res.status(400).json({ error: 'Custom slug must be at least 3 alphanumeric characters.' });
       }
-      if (vault.has(sanitized)) {
+      const slugExists = await hasVaultEntry(sanitized);
+      if (slugExists) {
         return res.status(400).json({ error: 'This custom slug is already in use.' });
       }
       id = sanitized;
@@ -127,7 +139,7 @@ apiRouter.post(['/secret', '/secrets'], (req: Request, res: Response) => {
       webhook_url,
     };
 
-    vault.set(id, entry);
+    await saveVaultEntry(entry);
 
     const clientBase = getClientBaseUrl(req);
     const view_url = `${clientBase}/view/${id}`;
@@ -151,16 +163,16 @@ apiRouter.post(['/secret', '/secrets'], (req: Request, res: Response) => {
 });
 
 // 3. Metadata query without burning (GET /api/secret/:id/meta)
-apiRouter.get(['/secret/:id/meta', '/secrets/:id/meta'], (req: Request, res: Response) => {
+apiRouter.get(['/secret/:id/meta', '/secrets/:id/meta'], async (req: Request, res: Response) => {
   const id = req.params.id;
-  const entry = vault.get(id);
+  const entry = await getVaultEntry(id);
 
   if (!entry) {
     return res.status(404).json({ error: 'Secret not found, expired, or already destroyed.' });
   }
 
   if (entry.expires_at <= Date.now() || entry.views_remaining <= 0) {
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(404).json({ error: 'Secret not found, expired, or already destroyed.' });
   }
 
@@ -177,9 +189,9 @@ apiRouter.get(['/secret/:id/meta', '/secrets/:id/meta'], (req: Request, res: Res
 });
 
 // 4. Reveal & Atomically Burn Secret
-export const handleBurnSecret = (req: Request, res: Response) => {
+export const handleBurnSecret = async (req: Request, res: Response) => {
   const id = req.params.id;
-  const entry = vault.get(id);
+  const entry = await getVaultEntry(id);
 
   if (!entry) {
     return res.status(404).json({ error: 'Secret not found, expired, or already destroyed.' });
@@ -187,7 +199,7 @@ export const handleBurnSecret = (req: Request, res: Response) => {
 
   // Check expiration
   if (entry.expires_at <= Date.now()) {
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(404).json({ error: 'Secret not found, expired, or already destroyed.' });
   }
 
@@ -210,12 +222,10 @@ export const handleBurnSecret = (req: Request, res: Response) => {
     }
   }
 
-  // ATOMIC BURN: Decrement views immediately in synchronous block
-  entry.views_remaining -= 1;
-  const burned = entry.views_remaining <= 0;
-
-  if (burned) {
-    vault.delete(id);
+  // ATOMIC BURN: Decrement views and delete if zero
+  const { entry: burnedEntry, burned } = await burnVaultEntry(id);
+  if (!burnedEntry) {
+    return res.status(404).json({ error: 'Secret not found, expired, or already destroyed.' });
   }
 
   // Decrypt AES-256-GCM ciphertext
@@ -238,14 +248,14 @@ export const handleBurnSecret = (req: Request, res: Response) => {
           id: entry.id,
           timestamp: new Date().toISOString(),
           burned,
-          views_remaining: Math.max(0, entry.views_remaining),
+          views_remaining: Math.max(0, burnedEntry.views_remaining),
         }),
       }).catch(() => null);
     }
 
     return res.status(200).json({
       secret: decrypted,
-      views_remaining: Math.max(0, entry.views_remaining),
+      views_remaining: Math.max(0, burnedEntry.views_remaining),
       burned,
       secret_type: entry.secret_type,
       file_name: entry.file_name,
@@ -255,7 +265,7 @@ export const handleBurnSecret = (req: Request, res: Response) => {
   } catch (decryptErr) {
     console.error('Decryption failed:', decryptErr);
     // Delete corrupted or tampered secret
-    vault.delete(id);
+    await deleteVaultEntry(id);
     return res.status(500).json({ error: 'Failed to decrypt secret payload.' });
   }
 };

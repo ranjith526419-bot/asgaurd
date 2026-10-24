@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Shield, Sparkles, Server, Github, ExternalLink } from 'lucide-react';
+import { Shield, Sparkles, Server, Github, ExternalLink, Settings } from 'lucide-react';
 import { CreateSecretForm } from './components/CreateSecretForm';
 import { SuccessCard } from './components/SuccessCard';
 import { RevealCard } from './components/RevealCard';
 import { RecentSecrets } from './components/RecentSecrets';
 import { ThemeToggle } from './components/ThemeToggle';
+import { BackendSettingsModal } from './components/BackendSettingsModal';
 import { AboutPage } from './components/pages/AboutPage';
 import { FaqPage } from './components/pages/FaqPage';
 import { PrivacyPage } from './components/pages/PrivacyPage';
@@ -13,7 +14,7 @@ import { TermsPage } from './components/pages/TermsPage';
 import { StatusPage } from './components/pages/StatusPage';
 import { NotFoundPage } from './components/pages/NotFoundPage';
 import { CreateSecretResponse } from './types';
-import { isDemoModeActive, setDemoModeActive, getApiBaseUrl, getAppSubpath } from './lib/api';
+import { isDemoModeActive, setDemoModeActive, getApiBaseUrl, getAppSubpath, isGitHubPages, isBackendConfigured } from './lib/api';
 import toast from 'react-hot-toast';
 
 // Convert full browser pathname to normalized app route (e.g. '/asgaurd/about' -> '/about', '/asgaurd/' -> '/')
@@ -40,6 +41,7 @@ export default function App() {
   });
   const [createdSecret, setCreatedSecret] = useState<CreateSecretResponse | null>(null);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => isDemoModeActive());
+  const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
 
   // Handle browser popstate navigation
   useEffect(() => {
@@ -272,6 +274,17 @@ export default function App() {
               )}
             </button>
 
+            {/* Backend URL Settings */}
+            <button
+              type="button"
+              onClick={() => setIsBackendModalOpen(true)}
+              aria-label="Backend API Settings"
+              title={`Configure Backend API (${getApiBaseUrl()})`}
+              className="p-2 rounded-lg text-xs font-medium bg-[#141414] dark:bg-[#141414] light:bg-slate-100 border border-[#262626] dark:border-[#262626] light:border-slate-300 text-[#a1a1a1] hover:text-[#fafafa] transition-colors cursor-pointer"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+
             <ThemeToggle />
           </div>
         </div>
@@ -347,6 +360,12 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Backend Settings Dialog */}
+      <BackendSettingsModal
+        isOpen={isBackendModalOpen}
+        onClose={() => setIsBackendModalOpen(false)}
+      />
     </div>
   );
 }

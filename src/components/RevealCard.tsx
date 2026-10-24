@@ -42,16 +42,38 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
   // Recipient Hint from metadata or payload
   const demoMeta = getDemoSecretMetadata(secretId);
   const [hint, setHint] = useState<string | null>(demoMeta?.hint || null);
+  const [networkErrorMsg, setNetworkErrorMsg] = useState<string | null>(null);
+  const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
 
-  useEffect(() => {
+  const checkMetadata = () => {
     let isMounted = true;
-    getSecretMetadata(secretId).then((meta) => {
-      if (!isMounted || !meta) return;
-      if (meta.hint) setHint(meta.hint);
-    });
+    getSecretMetadata(secretId)
+      .then((meta) => {
+        if (!isMounted || !meta) return;
+        if (meta.notFound) {
+          setState('not_found');
+          return;
+        }
+        if (meta.networkError) {
+          setState('network_error');
+          setNetworkErrorMsg(meta.errorMessage || 'Could not connect to the vault backend.');
+          return;
+        }
+        if (meta.hint) setHint(meta.hint);
+        setState('ready');
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setState('network_error');
+      });
+
     return () => {
       isMounted = false;
     };
+  };
+
+  useEffect(() => {
+    return checkMetadata();
   }, [secretId]);
 
   // Password Prompt state
@@ -124,13 +146,14 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
           return;
         }
 
-        if (err.status === 404) {
-          setState('not_found');
+        if (err.isNetworkError) {
+          setState('network_error');
+          setNetworkErrorMsg(err.message || 'Could not connect to the secret vault backend.');
           return;
         }
 
-        if (err.isNetworkError) {
-          setState('network_error');
+        if (err.status === 404) {
+          setState('not_found');
           return;
         }
 
@@ -138,6 +161,7 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
         setState('ready');
       } else {
         setState('network_error');
+        setNetworkErrorMsg('An unexpected connection error occurred.');
       }
     } finally {
       setIsDecryptingPassword(false);
@@ -172,7 +196,7 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
       await burnSecret(secretId);
       toast.error('Secret still unexpectedly found.');
     } catch (err: unknown) {
-      if (err instanceof VaultApiError && err.status === 404) {
+      if (err instanceof VaultApiError && err.status === 404 && !err.isNetworkError) {
         toast.success('Confirmed! Secret is completely gone (404 Not Found).');
         setState('not_found');
       } else {
@@ -191,17 +215,33 @@ export function RevealCard({ secretId, onNavigateHome, onNavigateAbout }: Reveal
           <WifiOff className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-[#fafafa]">Connection Failed</h2>
-        <p className="text-sm text-[#a1a1a1]">
-          Could not reach the vault server. Check your connection or verify that the backend is active.
+        <p className="text-sm text-[#a1a1a1] leading-relaxed">
+          {networkErrorMsg || 'Could not reach the vault server. Check your connection or verify that the backend is active.'}
         </p>
-        <button
-          type="button"
-          onClick={() => executeBurn(password || undefined)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow-lg shadow-indigo-500/20 cursor-pointer"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Retry Connection</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => checkMetadata()}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#6366f1] hover:bg-[#4f46e5] text-white shadow-lg shadow-indigo-500/20 cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry Connection</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsBackendModalOpen(true)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-[#222] hover:bg-[#2c2c2c] text-[#fafafa] border border-[#333] transition-colors cursor-pointer"
+          >
+            <Server className="w-4 h-4 text-[#6366f1]" />
+            <span>Configure Backend URL</span>
+          </button>
+        </div>
+
+        <BackendSettingsModal
+          isOpen={isBackendModalOpen}
+          onClose={() => setIsBackendModalOpen(false)}
+          onSaved={() => checkMetadata()}
+        />
       </div>
     );
   }

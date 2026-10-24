@@ -44,12 +44,17 @@ export async function createApp(): Promise<Express> {
           return callback(null, true);
         }
 
-        // 3. Allow explicitly configured origins from environment variables
+        // 3. Allow Vercel deployments (*.vercel.app and preview domains)
+        if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(cleanOrigin)) {
+          return callback(null, true);
+        }
+
+        // 4. Allow explicitly configured origins from environment variables
         if (configuredOrigins.includes(cleanOrigin) || configuredOrigins.includes('*')) {
           return callback(null, true);
         }
 
-        // 4. Allow AI Studio development and shared preview origins
+        // 5. Allow AI Studio development and shared preview origins
         if (/^https:\/\/ais-(dev|pre)-[a-zA-Z0-9-]+\.asia-southeast1\.run\.app$/.test(cleanOrigin)) {
           return callback(null, true);
         }
@@ -63,8 +68,9 @@ export async function createApp(): Promise<Express> {
     })
   );
 
-  // Mount API router
+  // Mount API router (supports both /api/* and direct /* in serverless)
   app.use('/api', apiRouter);
+  app.use(apiRouter);
 
   // Frontend Integration: Vite middleware in development / Static assets in production
   if (!isProd) {

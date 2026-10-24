@@ -4,9 +4,10 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(({ command }) => {
-  const repoName = process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : undefined;
-  // Relative base ('./') is only supported for build; in dev mode default to '/' unless BASE_PATH is set
-  const base = process.env.BASE_PATH || (command === 'build' ? repoName || './' : '/');
+  const isVercel = Boolean(process.env.VERCEL);
+  const repoName = !isVercel && process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : undefined;
+  // On Vercel, app is hosted at root domain ('/'). Relative or subpath only for GitHub Pages.
+  const base = process.env.BASE_PATH || (isVercel ? '/' : command === 'build' ? repoName || './' : '/');
 
   return {
     base,
