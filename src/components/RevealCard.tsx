@@ -15,12 +15,14 @@ import {
   Clock,
   ExternalLink,
   Flame,
+  Server,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 import { CopyButton } from './CopyButton';
 import { CountdownTimer } from './CountdownTimer';
 import { QrCodeModal } from './QrCodeModal';
-import { burnSecret, VaultApiError, getDemoSecretMetadata, getSecretMetadata } from '../lib/api';
+import { BackendSettingsModal } from './BackendSettingsModal';
+import { burnSecret, VaultApiError, getDemoSecretMetadata, getSecretMetadata, isGitHubPages } from '../lib/api';
 import { BurnSecretResponse } from '../types';
 import toast from 'react-hot-toast';
 
